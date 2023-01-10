@@ -1,0 +1,63 @@
+# Replace these environment variables with the ones on your system.
+BINJA_CORE="/path/to/binja_core/"
+BINJA_API="/path/to/binja_api"
+BINJA_API_LIB="/path/to/binja_api/build/out"
+RUST_PLUGIN="/path/to/cloned_repo/ehdump/target/debug"
+PQXX_SO="/usr/local/lib"
+DEBUG_FLAGS=-g
+
+all: threat_analysis taint_analysis
+
+test_db: test_db.cpp database.cpp
+	g++ -std=c++17 -I$(BINJA_API) test_db.cpp -c -o test_db.o
+	g++ -std=c++17 -I$(BINJA_API) database.cpp -c -o database.o
+	g++ -std=c++17 -Wl,-rpath,"/usr/local/lib" test_db.o database.o -o test_db -lpqxx -lpq -ljsoncpp
+
+threat_analysis: threat_analysis.cpp threat_analysis.h wqueue.h hlil_printer.h hlil_printer.cpp database.cpp database.h main.cpp bvhelper.cpp analysis.cpp analysis.h
+	c++ -std=c++17 -I$(BINJA_API) analysis.cpp -c -o analysis.o
+	c++ -std=c++17 -I$(BINJA_API) threat_analysis.cpp -c -o threat_analysis.o
+	c++ -std=c++17 -I$(BINJA_API) hlil_printer.cpp -c -o hlil_printer.o
+	c++ -std=c++17 -I$(BINJA_API) -DTHREAT_ANALYSIS main.cpp -c -o main.o
+	c++ -std=c++17 -I$(BINJA_API) bvhelper.cpp -c -o bvhelper.o
+	c++ -std=c++17 -I$(BINJA_API) database.cpp -c -o database.o
+	c++ -std=c++17 -Wl,-rpath,$(BINJA_CORE) -Wl,-rpath,$(PQXX_SO) -Wl,-rpath,$(RUST_PLUGIN) -L$(BINJA_CORE)  -L$(RUST_PLUGIN) -L$(BINJA_API_LIB) main.o threat_analysis.o analysis.o hlil_printer.o database.o bvhelper.o -o threat_analysis -ldl -lpthread  -pthread -l:libbinaryninjacore.so.1 -lbinaryninjaapi -lpqxx -lpq -ljsoncpp -lehdump -lboost_system -lboost_filesystem
+
+threat_analysis_low: threat_analysis.cpp threat_analysis.h wqueue.h hlil_printer.h hlil_printer.cpp database.cpp database.h main.cpp bvhelper.cpp analysis.cpp analysis.h
+	c++ -std=c++17 -I$(BINJA_API) analysis.cpp -c -o analysis.o
+	c++ -std=c++17 -I$(BINJA_API) -DLOWER_BOUND_STATS threat_analysis.cpp -c -o threat_analysis.o
+	c++ -std=c++17 -I$(BINJA_API) hlil_printer.cpp -c -o hlil_printer.o
+	c++ -std=c++17 -I$(BINJA_API) -DTHREAT_ANALYSIS main.cpp -c -o main.o
+	c++ -std=c++17 -I$(BINJA_API) bvhelper.cpp -c -o bvhelper.o
+	c++ -std=c++17 -I$(BINJA_API) database.cpp -c -o database.o
+	c++ -std=c++17 -Wl,-rpath,$(BINJA_CORE) -Wl,-rpath,$(PQXX_SO) -Wl,-rpath,$(RUST_PLUGIN) -L$(BINJA_CORE)  -L$(RUST_PLUGIN) -L$(BINJA_API_LIB) main.o threat_analysis.o analysis.o hlil_printer.o database.o bvhelper.o -o threat_analysis_low -ldl -lpthread  -pthread -l:libbinaryninjacore.so.1 -lbinaryninjaapi -lpqxx -lpq -ljsoncpp -lehdump -lboost_system -lboost_filesystem
+
+stack_analysis: database.cpp database.h main.cpp stack_analysis.cpp stack_analysis.h analysis.cpp analysis.h
+	c++ -std=c++17 -DSTACK_ANALYSIS -I$(BINJA_API) analysis.cpp -c -o analysis.o
+	c++ -std=c++17 -I$(BINJA_API) stack_analysis.cpp -c -o stack_analysis.o
+	c++ -std=c++17 -DSTACK_ANALYSIS -I$(BINJA_API) database.cpp -c -o database.o
+	c++ -std=c++17 -DSTACK_ANALYSIS -I$(BINJA_API) main.cpp -c -o main.o
+	c++ -std=c++17 -I$(BINJA_API) bvhelper.cpp -c -o bvhelper.o
+	c++ -std=c++17 -Wl,-rpath,$(BINJA_CORE) -Wl,-rpath,$(PQXX_SO) -Wl,-rpath,$(RUST_PLUGIN) -L$(BINJA_CORE) -L$(RUST_PLUGIN) -L$(BINJA_API_LIB) main.o stack_analysis.o analysis.o database.o bvhelper.o -o stack_analysis -ldl -lpthread  -pthread -l:libbinaryninjacore.so.1 -lbinaryninjaapi -lpqxx -lpq -ljsoncpp -lehdump -lboost_system -lboost_filesystem
+
+taint_analysis: database.cpp database.h main.cpp taint_analysis.cpp taint_analysis.h analysis.cpp analysis.h hlilcomparator.cpp hlilcomparator.h
+	c++ -std=c++17 $(DEBUG_FLAGS) -I$(BINJA_API) hlilcomparator.cpp -c -o hlilcomparator.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -DTAINT_ANALYSIS -I$(BINJA_API) analysis.cpp -c -o analysis.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -I$(BINJA_API) llil_printer.cpp -c -o llil_printer.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -I$(BINJA_API) hlil_printer.cpp -c -o hlil_printer.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -I$(BINJA_API) taint_analysis.cpp -c -o taint_analysis.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -DTAINT_ANALYSIS -I$(BINJA_API) database.cpp -c -o database.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -DTAINT_ANALYSIS -I$(BINJA_API) main.cpp -c -o main.o
+	c++ -std=c++17 -I$(BINJA_API) bvhelper.cpp -c -o bvhelper.o
+	c++ -std=c++17 $(DEBUG_FLAGS) -Wl,-rpath,$(BINJA_CORE) -Wl,-rpath,$(PQXX_SO) -Wl,-rpath,$(RUST_PLUGIN) -L$(BINJA_CORE) -L$(RUST_PLUGIN)  -L$(BINJA_API_LIB)  main.o hlilcomparator.o hlil_printer.o llil_printer.o taint_analysis.o analysis.o database.o  bvhelper.o -o taint_analysis -ldl -lpthread  -pthread -l:libbinaryninjacore.so.1 -lbinaryninjaapi -lpqxx -lpq -ljsoncpp -lehdump -lboost_system -lboost_filesystem
+
+oss_fuzz: threat_analysis_ossfuzz.cpp threat_analysis_ossfuzz.h wqueue.h hlil_printer.h hlil_printer.cpp database.cpp database.h main.cpp bvhelper.cpp analysis.cpp analysis.h
+	c++ -std=c++17  $(DEBUG_FLAGS)  -I$(BINJA_API) -DOSS_THREAT_ANALYSIS analysis.cpp -c -o analysis.o
+	c++ -std=c++17  $(DEBUG_FLAGS)  -I$(BINJA_API)  threat_analysis_ossfuzz.cpp -c -o threat_analysis_ossfuzz.o
+	c++ -std=c++17  $(DEBUG_FLAGS)  -I$(BINJA_API) hlil_printer.cpp -c -o hlil_printer.o
+	c++ -std=c++17  $(DEBUG_FLAGS)  -I$(BINJA_API) -DOSS_THREAT_ANALYSIS main.cpp -c -o main.o
+	c++ -std=c++17  $(DEBUG_FLAGS)  -I$(BINJA_API) bvhelper.cpp -c -o bvhelper.o
+	c++ -std=c++17  $(DEBUG_FLAGS)  -I$(BINJA_API) database.cpp -c -o database.o
+	c++ -std=c++17  $(DEBUG_FLAGS)  -Wl,-rpath,$(BINJA_CORE) -Wl,-rpath,$(PQXX_SO) -Wl,-rpath,$(RUST_PLUGIN) -L$(BINJA_CORE)  -L$(RUST_PLUGIN) -L$(BINJA_API_LIB) main.o threat_analysis_ossfuzz.o analysis.o hlil_printer.o database.o bvhelper.o -o oss_threat -ldl -lpthread  -pthread -l:libbinaryninjacore.so.1 -lbinaryninjaapi -lpqxx -lpq -ljsoncpp -lehdump -lboost_system -lboost_filesystem
+
+clean:
+	rm -f test_db threat_analysis *.o taint_analysis

