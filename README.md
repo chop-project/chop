@@ -32,3 +32,7 @@ Our paper will be published at the Network and Distributed System Security Sympo
 
 ## Black Hat Talk
 We also presented our findings at BlackHat EU'22. You can find the slides [here](http://i.blackhat.com/EU-22/Wednesday-Briefings/EU-22-Duta-Unwinding-the-Stack-for-fun-and-profit.pdf) and a recording will (likely) be available at a later time.
+
+## Recon Talk
+We presented exception handling internals at Recon'22. These internals are useful background for understanding CHOP attacks. You can find the recording [here](https://recon.cx/media-archive/2022/Recon2022_18_The_Mysterious_Life_of_an_Exception.mp4) and the slides [here](https://recon2022-exceptions.github.io/).
+
